@@ -1,7 +1,6 @@
 import math
-from math import tan, sin, cos, pi
+from math import tan, sin, cos
 import sys
-from dataclasses import dataclass
 
 import numpy as np
 import pygame
@@ -9,13 +8,15 @@ import pygame
 SCREEN_WIDTH = 720
 SCREEN_HEIGHT = 720
 
-Z_FAR = 10
+Z_FAR = 100
 Z_NEAR = 0.1
 
 ASPECT_RATIO = SCREEN_WIDTH / SCREEN_HEIGHT
-FOV_DEGREES = 90
 
 NUMPY_ARRAY_TYPE = float
+
+vector3 = np.ndarray
+vector4 = np.ndarray
 
 
 class Camera:
@@ -37,12 +38,25 @@ class Camera:
     STARTING_ORIENTATION = [0, 0, 0]
     ORIENTATION_DELTA = 5
 
-    position: np.ndarray
+    FOV_DELTA = 10
+    STARTING_FOV_DEGREES = 90
+
+    fov: int
+    position: vector4
     orientation: list[float]
 
     def __init__(self):
         self.position = self.STARTING_POSITION
         self.orientation = self.STARTING_ORIENTATION
+        self.fov = self.STARTING_FOV_DEGREES
+
+    def zoom_in(self):
+        self.fov -= self.FOV_DELTA
+        self.fov = max(self.fov, 10)
+
+    def zoom_out(self):
+        self.fov += self.FOV_DELTA
+        self.fov = min(self.fov, 170)
 
     def rotate_right(self):
         self.orientation[2] += self.ORIENTATION_DELTA
@@ -95,25 +109,37 @@ class Camera:
 
     def get_rotation_matrix(self):
         o_x, o_y, o_z = list(map(math.radians, self.orientation))
-        c3 = cos(o_z)
-        s3 = sin(o_z)
-        c2 = cos(o_x)
-        s2 = sin(o_x)
-        c1 = cos(o_y)
-        s1 = sin(o_y)
-        u = np.array([c1 * c3 + s1 * s2 * s3, c2 * s3, c1 * s2 * s3 - c3 * s1, 0], dtype=NUMPY_ARRAY_TYPE)
-        v = np.array([c3 * s1 * s2 - c1 * s3, c2 * c3, c1 * c3 * s2 + s1 * s3, 0], dtype=NUMPY_ARRAY_TYPE)
-        w = np.array([c2 * s1, -s2, c1 * c2, 0], dtype=NUMPY_ARRAY_TYPE)
+        cx = cos(o_x)
+        sx = sin(o_x)
+
+        cy = cos(o_y)
+        sy = sin(o_y)
+
+        cz = cos(o_z)
+        sz = sin(o_z)
+
+        u = np.array([cy * cz + sy * sx * sz, cx * sz, cy * sx * sz - cz * sy, 0], dtype=NUMPY_ARRAY_TYPE)
+        v = np.array([cz * sy * sx - cy * sz, cx * cz, cy * cz * sx + sy * sz, 0], dtype=NUMPY_ARRAY_TYPE)
+        w = np.array([cx * sy, -sx, cy * cx, 0], dtype=NUMPY_ARRAY_TYPE)
 
         rotation_matrix = np.array([u, v, w, [0, 0, 0, 1]], dtype=NUMPY_ARRAY_TYPE).transpose()
 
-        return rotation_matrix.copy()
+        return rotation_matrix
 
 
-@dataclass
 class Shape:
-    points: dict[str, np.ndarray]
-    edges: list[tuple[str, str]]
+    lines: list[tuple[vector4, vector4]]
+
+    def __init__(self, lines):
+        self.lines = lines
+
+    def copy(self):
+        return Shape([(point1.copy(), point2.copy()) for point1, point2 in self.lines])
+
+    def set_offset(self, offset: np.ndarray):
+        for p1, p2 in self.lines:
+            p1 += offset
+            p2 += offset
 
 
 def read_object_from_file(filename: str):
@@ -125,17 +151,17 @@ def read_object_from_file(filename: str):
             args = f.readline().strip().split()
             points[args[0]] = np.array([[float(x)] for x in args[1:4] + [1]], dtype=NUMPY_ARRAY_TYPE)
 
-        num_of_edges = int(f.readline())
-        edges = []
-        for _ in range(num_of_edges):
+        num_of_lines = int(f.readline())
+        lines = []
+        for _ in range(num_of_lines):
             args = f.readline().strip().split()
-            edges.append((args[0], args[1]))
+            lines.append((points[args[0]].copy(), points[args[1]].copy()))
 
-        return Shape(points, edges)
+        return Shape(lines)
 
 
-def get_perspective_projection_matrix():
-    f = 1 / tan(math.radians(FOV_DEGREES / 2))
+def get_perspective_projection_matrix(camera: Camera):
+    f = 1 / tan(math.radians(camera.fov / 2))
     q = Z_FAR / (Z_FAR - Z_NEAR)
     projection_matrix = np.array([[f / ASPECT_RATIO, 0, 0, 0],
                                   [0, f, 0, 0],
@@ -144,174 +170,81 @@ def get_perspective_projection_matrix():
     return projection_matrix
 
 
-def project_shape(camera: Camera,
-                  shape: Shape) -> Shape:
-    def _project_point(point: np.ndarray) -> np.ndarray:
-        result = point.copy()
+def on_update_shape(camera: Camera,
+                    shape: Shape) -> Shape:
+    shape.copy()
+    view_matrix = camera.get_view_matrix()
+    perspective_projection_matrix = get_perspective_projection_matrix(camera)
 
-        view_matrix = camera.get_view_matrix()
-        result = view_matrix @ result
-
-        perspective_projection_matrix = get_perspective_projection_matrix()
-        result = perspective_projection_matrix @ result
-
-        if result[3, 0] != 0:
-            result /= result[3, 0]
-
-        return result
-
-    return Shape(
-        {name: _project_point(point) for name, point in shape.points.items()},
-        shape.edges
-    )
-
-
-X_MIN = -1
-X_MAX = 1
-
-Y_MIN = -1
-Y_MAX = 1
-
-Z_MIN = 0
-Z_MAX = 1
-
-
-# reference: https://www.mdpi.com/1999-4893/16/4/201
-def clip_edge(p0: np.ndarray, p1: np.ndarray):
-    p0 = p0.copy()
-    p1 = p1.copy()
-
-    def recover_real_z(z_out):
-        q = Z_FAR / (Z_FAR - Z_NEAR)
-        z_in = (q * Z_NEAR) / (q - z_out)
-        return z_in
-
-    x0 = p0[0, 0]
-    y0 = p0[1, 0]
-    # z0 = p0[2, 0]
-    z0 = recover_real_z(p0[2, 0])
-
-    x1 = p1[0, 0]
-    y1 = p1[1, 0]
-    # z1 = p0[2, 0]
-    z1 = recover_real_z(p1[2, 0])
-
-    print(f'z0={z0}, z1={z1}')
-
-    if not ((x0 < X_MIN and x1 < X_MIN) or (x0 > X_MAX and x1 > X_MAX) or
-            (y0 < Y_MIN and y1 < Y_MIN) or (y0 > Y_MAX and y1 > Y_MAX) or
-            (z0 < Z_MIN and z1 < Z_MIN) or (z0 > Z_MAX and z1 > Z_MAX)):
-
-        a = x1 - x0
-        b = y1 - y0
-        c = z1 - z0
-
-        if x0 < X_MIN:
-            y0 = b / a * (X_MIN - x0) + y0
-            z0 = c / a * (X_MIN - x0) + z0
-            x0 = X_MIN
-        elif x0 > X_MAX:
-            y0 = b / a * (X_MAX - x0) + y0
-            z0 = c / a * (X_MAX - x0) + z0
-            x0 = X_MAX
-
-        if y0 < Y_MIN:
-            x0 = a / b * (Y_MIN - y0) + x0
-            z0 = c / b * (Y_MIN - y0) + z0
-            y0 = Y_MIN
-        elif y0 > Y_MAX:
-            x0 = a / b * (Y_MAX - y0) + x0
-            z0 = c / b * (Y_MAX - y0) + z0
-            y0 = Y_MAX
-        if z0 < Z_MIN:
-            x0 = a / c * (Z_MIN - z0) + x0
-            y0 = b / c * (Z_MIN - z0) + y0
-            z0 = Z_MIN
-        elif z0 > Z_MAX:
-            x0 = a / c * (Z_MAX - z0) + x0
-            y0 = b / c * (Z_MAX - z0) + y0
-            z0 = Z_MAX
-
-        p0[0][0] = x0
-        p0[1][0] = y0
-        p0[2][0] = z0
-
-        if x1 < X_MIN:
-            y1 = b / a * (X_MIN - x0) + y0
-            z1 = c / a * (X_MIN - x0) + z0
-            x1 = X_MIN
-        elif x1 > X_MAX:
-            y1 = b / a * (X_MAX - x0) + y0
-            z1 = c / a * (X_MAX - x0) + z0
-            x1 = X_MAX
-
-        if y1 < Y_MIN:
-            x1 = a / b * (Y_MIN - y0) + x0
-            z1 = c / b * (Y_MIN - y0) + z0
-            y1 = Y_MIN
-        elif y1 > Y_MAX:
-            x1 = a / b * (Y_MAX - y0) + x0
-            z1 = c / b * (Y_MAX - y0) + z0
-            y1 = Y_MAX
-
-        if z1 < Z_MIN:
-            x1 = a / c * (Z_MIN - z0) + x0
-            y1 = b / c * (Z_MIN - z0) + y0
-            z1 = Z_MIN
-        elif z1 > Z_MAX:
-            x1 = a / c * (Z_MAX - z0) + x0
-            y1 = b / c * (Z_MAX - z0) + y0
-            z1 = Z_MAX
-
-        p1[0][0] = x1
-        p1[1][0] = y1
-        p1[2][0] = z1
-    else:
-        return None
-
-    return p0, p1
-
-
-def clip_shape(shape: Shape):
-    clipped_edges: list[tuple[str, str]] = []
-    points: dict[str, np.ndarray] = {}
-
-    i = 0
-    for edge in shape.edges:
-        clipped_edge = clip_edge(shape.points[edge[0]], shape.points[edge[1]])
-        if clipped_edge is None:
+    updated_lines = []
+    for line in shape.lines:
+        updated_line = tuple(view_matrix @ point for point in line)
+        updated_line = line_clip_against_plane(np.array([0, 0, Z_NEAR]),
+                                               np.array([0, 0, 1]),
+                                               updated_line[0].flatten()[:3],
+                                               updated_line[1].flatten()[:3])
+        if updated_line is None:
             continue
-        p0, p1 = clipped_edge
+        updated_line = tuple(np.array([[point[0]],
+                                       [point[1]],
+                                       [point[2]],
+                                       [1]]) for point in updated_line)
 
-        p0_name = str(i)
-        same_point_found = False
+        updated_line = tuple(perspective_projection_matrix @ point for point in updated_line)
+        updated_line = tuple(point / point[3][0] if point[3][0] != 0 else point
+                             for point in updated_line)
 
-        for point_name, point in points.items():
-            if np.array_equal(point, p0):
-                same_point_found = True
-                p0_name = point_name
-                break
+        updated_lines.append(updated_line)
 
-        points[p0_name] = p0
-        if not same_point_found:
-            i += 1
+    return Shape(updated_lines)
 
-        p1_name = str(i)
-        same_point_found = False
 
-        for point_name, point in points.items():
-            if np.array_equal(point, p1):
-                same_point_found = True
-                p1_name = point_name
-                break
+def normalize(v: np.ndarray):
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
 
-        points[p1_name] = p1
-        if not same_point_found:
-            i += 1
 
-        clipped_edges.append((p0_name, p1_name))
+def get_intersection_point_of_line_with_a_plane(plane_p: np.ndarray,
+                                                plane_n: np.ndarray,
+                                                line_start: np.ndarray,
+                                                line_end: np.ndarray):
+    plane_n = normalize(plane_n)
+    plane_d = -np.dot(plane_n, plane_p)
+    ad = np.dot(line_start, plane_n)
+    bd = np.dot(line_end, plane_n)
+    t = (-plane_d - ad) / (bd - ad)
+    return line_start + (line_end - line_start) * t
 
-    return Shape(points, clipped_edges)
+
+def line_clip_against_plane(plane_p: vector3,
+                            plane_n: vector3,
+                            line_start: vector3,
+                            line_end: vector3):
+    # plane_n = normalize(plane_n)
+
+    def get_signed_distance(point: vector3):
+        return np.dot(plane_n, point) - np.dot(plane_n, plane_p)
+
+    start_dist = get_signed_distance(line_start)
+    end_dist = get_signed_distance(line_end)
+
+    if start_dist < 0 and end_dist < 0:  # both are outside
+        return None
+    elif start_dist * end_dist > 0:  # both are inside
+        return line_start, line_end
+    else:
+        intersection_point = get_intersection_point_of_line_with_a_plane(
+            plane_p,
+            plane_n,
+            line_start,
+            line_end
+        )
+        if start_dist < 0:
+            return intersection_point, line_end
+        else:
+            return line_start, intersection_point
 
 
 def draw_shape(camera: Camera,
@@ -330,11 +263,8 @@ def draw_shape(camera: Camera,
     orientation_text_width = text_surface_camera_orientation.get_width()
     screen.blit(text_surface_camera_orientation, dest=[SCREEN_WIDTH - orientation_text_width, coord_text_height])
 
-    for edge in shape.edges:
-        point1_name, point2_name = edge
-
-        point1 = shape.points[point1_name]
-        point2 = shape.points[point2_name]
+    for edge in shape.lines:
+        point1, point2 = edge
 
         x1 = (point1[0, 0] + 1) * SCREEN_WIDTH / 2
         y1 = (point1[1, 0] + 1) * SCREEN_HEIGHT / 2
@@ -344,21 +274,37 @@ def draw_shape(camera: Camera,
 
         pygame.draw.line(screen, [0, 0, 0], (x1, y1), (x2, y2))
 
-        text_surface_point1 = point_description_font.render(point1_name, True, [0, 0, 0])
-        screen.blit(text_surface_point1, dest=(x1, y1))
-
-        text_surface_point2 = point_description_font.render(point2_name, True, [0, 0, 0])
-        screen.blit(text_surface_point2, dest=(x2, y2))
-
 
 def main() -> None:
     pygame.init()
     font = pygame.font.Font(pygame.font.get_default_font(), 12)
 
-    axis = read_object_from_file("axis.txt")
     cuboid = read_object_from_file("cuboid.txt")
-    cuboid_larger = read_object_from_file("cuboid_larger.txt")
-    shapes = [cuboid]
+
+    offsets = [
+        np.array([[1],
+                  [0],
+                  [1],
+                  [0]]),
+        np.array([[-4],
+                  [0],
+                  [1],
+                  [0]]),
+        np.array([[1],
+                  [0],
+                  [5],
+                  [0]]),
+        np.array([[-4],
+                  [0],
+                  [5],
+                  [0]]),
+    ]
+
+    shapes = []
+    for os in offsets:
+        shape = cuboid.copy()
+        shape.set_offset(os)
+        shapes.append(shape)
 
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Hello world")
@@ -369,9 +315,8 @@ def main() -> None:
         screen.fill((255, 255, 255))
 
         for shape in shapes:
-            projected_shape = project_shape(camera, shape)
-            clipped_shape = clip_shape(projected_shape)
-            draw_shape(camera, screen, clipped_shape, font)
+            shape = on_update_shape(camera, shape)
+            draw_shape(camera, screen, shape, font)
         pygame.display.update()
 
     draw()
@@ -412,6 +357,11 @@ def main() -> None:
                     camera.move_up()
                 case pygame.K_LSHIFT:
                     camera.move_down()
+
+                case pygame.K_z:
+                    camera.zoom_in()
+                case pygame.K_c:
+                    camera.zoom_out()
 
                 case _:
                     continue
