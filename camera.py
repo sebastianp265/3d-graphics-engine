@@ -84,6 +84,41 @@ class Camera:
     def move_down(self):
         self.position += self.get_rotation_matrix().multiply_by_vector(self.Y_POSITION_DELTA_VECTOR)
 
+    # def get_view_matrix(self):
+    #     v = self.v
+    #     w = self.w
+    #
+    #     u = Vector4.cross_product_xyz(w, v)
+    #     self.u = u
+    #
+    #     view_matrix = Matrix4.from_list([[u.get_x(), u.get_y(), u.get_z(), -Vector4.dot_product_xyz(u, self.position)],
+    #                                      [v.get_x(), v.get_y(), v.get_z(), -Vector4.dot_product_xyz(v, self.position)],
+    #                                      [w.get_x(), w.get_y(), w.get_z(), -Vector4.dot_product_xyz(w, self.position)],
+    #                                      [0, 0, 0, 1]])
+    #
+    #     return view_matrix
+    #
+
+    # def get_view_matrix_from_direction(self):
+    #     front = self.get_rotation_matrix().multiply_by_vector(self.front)
+    #     front = self.get_translation_matrix().multiply_by_vector(front)
+    #     front = front.get_normalized_xyz()
+    #
+    #     up = self.get_rotation_matrix().multiply_by_vector(self.up)
+    #     up = self.get_translation_matrix().multiply_by_vector(up)
+    #     up = up.get_normalized_xyz()
+    #
+    #     right = Vector4.cross_product_xyz(up, front)  # u
+    #
+    #     return Matrix4.from_list(
+    #         [[right.get_x(), right.get_y(), right.get_z(),
+    #           -Vector4.dot_product_xyz(right, self.position)],
+    #          [up.get_x(), up.get_y(), up.get_z(),
+    #           -Vector4.dot_product_xyz(up, self.position)],
+    #          [front.get_x(), front.get_y(), front.get_z(),
+    #           -Vector4.dot_product_xyz(front, self.position)],
+    #          [0, 0, 0, 1]])
+
     def get_view_matrix(self):
         view_matrix = self.get_rotation_matrix().transpose()
 
@@ -97,38 +132,78 @@ class Camera:
 
         return view_matrix
 
-    # https://en.wikipedia.org/wiki/Euler_angles#Conversion_to_other_orientation_representations
+    def get_rotation_matrix_over_x(self):
+        o_x = math.radians(self.orientation.get_x())
+        s_x = sin(o_x)
+        c_x = cos(o_x)
+        return Matrix4.from_list([[1, 0, 0, 0],
+                                  [0, c_x, -s_x, 0],
+                                  [0, s_x, c_x, 0],
+                                  [0, 0, 0, 1]])
+
+    def get_rotation_matrix_over_y(self):
+        o_y = math.radians(self.orientation.get_y())
+        s_y = sin(o_y)
+        c_y = cos(o_y)
+        return Matrix4.from_list([[c_y, 0, s_y, 0],
+                                  [0, 1, 0, 0],
+                                  [-s_y, 0, c_y, 0],
+                                  [0, 0, 0, 1]])
+
+    def get_rotation_matrix_over_z(self):
+        o_z = math.radians(self.orientation.get_z())
+        s_z = sin(o_z)
+        c_z = cos(o_z)
+        return Matrix4.from_list([[c_z, -s_z, 0, 0],
+                                  [s_z, c_z, 0, 0],
+                                  [0, 0, 1, 0],
+                                  [0, 0, 0, 1]])
+
     def get_rotation_matrix(self) -> Matrix4:
-        o_x, o_y, o_z = list(map(math.radians, [self.orientation.get_x(),
-                                                self.orientation.get_y(),
-                                                self.orientation.get_z()]))
-        c1 = cos(o_x)
-        s1 = sin(o_x)
+        r_x = self.get_rotation_matrix_over_x()
+        r_y = self.get_rotation_matrix_over_y()
+        r_z = self.get_rotation_matrix_over_z()
 
-        c2 = cos(o_y)
-        s2 = sin(o_y)
+        return r_x.multiply_by_matrix(r_y).multiply_by_matrix(r_z)
 
-        c3 = cos(o_z)
-        s3 = sin(o_z)
+    def get_translation_matrix(self):
+        return Matrix4.from_list([[1, 0, 0, -self.position.get_x()],
+                                  [0, 1, 0, -self.position.get_y()],
+                                  [0, 0, 1, -self.position.get_z()],
+                                  [0, 0, 0, 1]])
 
-        # u = [c2 * c3 + s2 * s1 * s3, c1 * s3, c2 * s1 * s3 - c3 * s2, 0]
-        # v = [c3 * s2 * s1 - c2 * s3, c1 * c3, c2 * c3 * s1 + s2 * s3, 0]
-        # w = [c1 * s2, -s1, c2 * c1, 0]
-
-        u = [c2 * c3, c1 * s3 + c3 * s1 * s2, s1 * s3 - c1 * c3 * s2, 0]
-        v = [-c2 * s3, c1 * c3 - s1 * s2 * s3, c3 * s1 + c1 * s2 * s3, 0]
-        w = [s2, -c2 * s1, c1 * c2, 0]
-
-        d = [0, 0, 0, 1]
-
-        rotation_matrix = Matrix4.from_list([u, v, w, d]).transpose()
-        # Desired output:
-        # [[u_x, v_x, w_x, 0],
-        #  [u_y, v_y, w_y, 0],
-        #  [u_z, v_z, w_z, 0],
-        #  [0  ,   0,   0, 1]]
-        print(rotation_matrix)
-        return rotation_matrix
+    # https://en.wikipedia.org/wiki/Euler_angles#Conversion_to_other_orientation_representations
+    # def get_rotation_matrix(self) -> Matrix4:
+    #     o_x, o_y, o_z = list(map(math.radians, [self.orientation.get_x(),
+    #                                             self.orientation.get_y(),
+    #                                             self.orientation.get_z()]))
+    #     c1 = cos(o_x)
+    #     s1 = sin(o_x)
+    #
+    #     c2 = cos(o_y)
+    #     s2 = sin(o_y)
+    #
+    #     c3 = cos(o_z)
+    #     s3 = sin(o_z)
+    #
+    #     # u = [c2 * c3 + s2 * s1 * s3, c1 * s3, c2 * s1 * s3 - c3 * s2, 0]
+    #     # v = [c3 * s2 * s1 - c2 * s3, c1 * c3, c2 * c3 * s1 + s2 * s3, 0]
+    #     # w = [c1 * s2, -s1, c2 * c1, 0]
+    #
+    #     u = [c2 * c3, c1 * s3 + c3 * s1 * s2, s1 * s3 - c1 * c3 * s2, 0]
+    #     v = [-c2 * s3, c1 * c3 - s1 * s2 * s3, c3 * s1 + c1 * s2 * s3, 0]
+    #     w = [s2, -c2 * s1, c1 * c2, 0]
+    #
+    #     d = [0, 0, 0, 1]
+    #
+    #     rotation_matrix = Matrix4.from_list([u, v, w, d]).transpose()
+    #     # Desired output:
+    #     # [[u_x, v_x, w_x, 0],
+    #     #  [u_y, v_y, w_y, 0],
+    #     #  [u_z, v_z, w_z, 0],
+    #     #  [0  ,   0,   0, 1]]
+    #     print(rotation_matrix)
+    #     return rotation_matrix
 
     def get_perspective_projection_matrix(self):
         f = 1 / math.tan(math.radians(self.fov / 2))

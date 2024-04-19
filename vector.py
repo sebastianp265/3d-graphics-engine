@@ -34,6 +34,21 @@ class Vector4:
     def dot_product_xyz(a: 'Vector4', b: 'Vector4') -> float:
         return (a.vector_np[:3] * b.vector_np[:3]).sum()
 
+    @staticmethod
+    def cross_product_xyz(a: 'Vector4', b: 'Vector4'):
+        a1 = a.get_x()
+        a2 = a.get_y()
+        a3 = a.get_z()
+
+        b1 = b.get_x()
+        b2 = b.get_y()
+        b3 = b.get_z()
+
+        return Vector4.from_cords(a2 * b3 - a3 * b2,
+                                  a3 * b1 - a1 * b3,
+                                  a1 * b2 - a2 * b1,
+                                  1)
+
     def __add__(self, other: 'Vector4') -> 'Vector4':
         result = self.copy()
         result.vector_np[:3] += other.vector_np[:3]

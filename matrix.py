@@ -19,6 +19,9 @@ class Matrix4:
     def copy(self) -> 'Matrix4':
         return Matrix4(self.matrix_np.copy())
 
+    def multiply_by_matrix(self, matrix: 'Matrix4'):
+        return Matrix4(self.matrix_np @ matrix.matrix_np)
+
     def multiply_by_vector(self, vector: Vector4) -> Vector4:
         result = Vector4(self.matrix_np @ vector.vector_np)
         if result.get_w() != 0:
