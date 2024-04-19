@@ -90,7 +90,7 @@ def draw_camera_info(camera: Camera,
     coord_text_height = text_surface_camera_position.get_height()
     screen.blit(text_surface_camera_position, dest=[SCREEN_WIDTH - coord_text_width, 0])
 
-    o_x, o_y, o_z = camera.orientation
+    o_x, o_y, o_z = camera.orientation.get_x(), camera.orientation.get_y(), camera.orientation.get_z()
     text_surface_camera_orientation = FONT.render(f'o_x={o_x} o_y={o_y} o_z={o_z}', True,
                                                   [0, 0, 0])
     orientation_text_width = text_surface_camera_orientation.get_width()
@@ -126,10 +126,10 @@ def draw(camera: Camera, screen: pygame.Surface, shapes: list[Shape]):
 def main() -> None:
     cuboid = loader.read_object_from_file("cuboid.txt")
 
-    offsets = [Vector4.from_cords(1, 0, 1, 0),
-               Vector4.from_cords(-4, 0, 1, 0),
-               Vector4.from_cords(1, 0, 5, 0),
-               Vector4.from_cords(-4, 0, 5, 0)]
+    offsets = [Vector4.from_cords(1, 0, 1, 1),
+               Vector4.from_cords(-4, 0, 1, 1),
+               Vector4.from_cords(1, 0, 5, 1),
+               Vector4.from_cords(-4, 0, 5, 1)]
 
     shapes = []
     for os in offsets:

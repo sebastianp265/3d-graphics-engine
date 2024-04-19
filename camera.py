@@ -12,8 +12,11 @@ class Camera:
     Y_POSITION_DELTA_VECTOR = Vector4.from_cords(0, POSITION_DELTA, 0, 1)
     Z_POSITION_DELTA_VECTOR = Vector4.from_cords(0, 0, POSITION_DELTA, 1)
 
-    STARTING_ORIENTATION = [0, 0, 0]
+    STARTING_ORIENTATION = Vector4.from_cords(0, 0, 0, 1)
     ORIENTATION_DELTA = 5
+    X_ORIENTATION_DELTA = Vector4.from_cords(ORIENTATION_DELTA, 0, 0, 1)
+    Y_ORIENTATION_DELTA = Vector4.from_cords(0, ORIENTATION_DELTA, 0, 1)
+    Z_ORIENTATION_DELTA = Vector4.from_cords(0, 0, ORIENTATION_DELTA, 1)
 
     FOV_DELTA = 10
     STARTING_FOV_DEGREES = 90
@@ -23,7 +26,7 @@ class Camera:
 
     fov: int
     position: Vector4
-    orientation: list[float]
+    orientation: Vector4
 
     screen_width: int
     screen_height: int
@@ -46,22 +49,22 @@ class Camera:
         self.fov = min(self.fov, 170)
 
     def rotate_right(self):
-        self.orientation[2] += self.ORIENTATION_DELTA
+        self.orientation.set_offset(self.Z_ORIENTATION_DELTA)
 
     def rotate_left(self):
-        self.orientation[2] -= self.ORIENTATION_DELTA
+        self.orientation.set_offset(self.Z_ORIENTATION_DELTA * (-1))
 
     def look_up(self):
-        self.orientation[0] += self.ORIENTATION_DELTA
+        self.orientation.set_offset(self.X_ORIENTATION_DELTA)
 
     def look_down(self):
-        self.orientation[0] -= self.ORIENTATION_DELTA
+        self.orientation.set_offset(self.X_ORIENTATION_DELTA * (-1))
 
     def look_right(self):
-        self.orientation[1] += self.ORIENTATION_DELTA
+        self.orientation.set_offset(self.Y_ORIENTATION_DELTA)
 
     def look_left(self):
-        self.orientation[1] -= self.ORIENTATION_DELTA
+        self.orientation.set_offset(self.Y_ORIENTATION_DELTA * (-1))
 
     def move_right(self):
         self.position += self.get_rotation_matrix().multiply_by_vector(self.X_POSITION_DELTA_VECTOR)
@@ -96,7 +99,9 @@ class Camera:
 
     # https://en.wikipedia.org/wiki/Euler_angles#Conversion_to_other_orientation_representations
     def get_rotation_matrix(self) -> Matrix4:
-        o_x, o_y, o_z = list(map(math.radians, self.orientation))
+        o_x, o_y, o_z = list(map(math.radians, [self.orientation.get_x(),
+                                                self.orientation.get_y(),
+                                                self.orientation.get_z()]))
         c1 = cos(o_x)
         s1 = sin(o_x)
 
