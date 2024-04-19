@@ -6,7 +6,7 @@ from vector import Vector4
 
 
 class Camera:
-    STARTING_POSITION = Vector4.from_cords(0, 0, -2, 0)
+    STARTING_POSITION = Vector4.from_cords(0, 0, 0, 0)
     POSITION_DELTA = 0.5
     X_POSITION_DELTA_VECTOR = Vector4.from_cords(POSITION_DELTA, 0, 0, 1)
     Y_POSITION_DELTA_VECTOR = Vector4.from_cords(0, POSITION_DELTA, 0, 1)
@@ -28,17 +28,24 @@ class Camera:
     position: Vector4
     orientation: Vector4
 
+    STARTING_VIEW_MATRIX = Matrix4.from_list([[1, 0, 0, 0],
+                                              [0, 1, 0, 0],
+                                              [0, 0, 1, 0],
+                                              [0, 0, 0, 1]])
+    view_matrix: Matrix4
+
     screen_width: int
     screen_height: int
     aspect_ratio: float
 
     def __init__(self, screen_width: int, screen_height: int):
-        self.position = self.STARTING_POSITION
-        self.orientation = self.STARTING_ORIENTATION
+        self.position = self.STARTING_POSITION.copy()
+        self.orientation = self.STARTING_ORIENTATION.copy()
         self.fov = self.STARTING_FOV_DEGREES
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.aspect_ratio = self.screen_width / self.screen_height
+        self.view_matrix = self.STARTING_VIEW_MATRIX
 
     def zoom_in(self):
         self.fov -= self.FOV_DELTA
@@ -50,39 +57,62 @@ class Camera:
 
     def rotate_right(self):
         self.orientation.set_offset(self.Z_ORIENTATION_DELTA)
+        self.update_view_matrix()
 
     def rotate_left(self):
         self.orientation.set_offset(self.Z_ORIENTATION_DELTA * (-1))
+        self.update_view_matrix()
 
     def look_up(self):
         self.orientation.set_offset(self.X_ORIENTATION_DELTA)
+        self.update_view_matrix()
 
     def look_down(self):
         self.orientation.set_offset(self.X_ORIENTATION_DELTA * (-1))
+        self.update_view_matrix()
 
     def look_right(self):
         self.orientation.set_offset(self.Y_ORIENTATION_DELTA)
+        self.update_view_matrix()
 
     def look_left(self):
         self.orientation.set_offset(self.Y_ORIENTATION_DELTA * (-1))
+        self.update_view_matrix()
 
     def move_right(self):
         self.position += self.get_rotation_matrix().multiply_by_vector(self.X_POSITION_DELTA_VECTOR)
+        self.update_view_matrix()
 
     def move_left(self):
         self.position -= self.get_rotation_matrix().multiply_by_vector(self.X_POSITION_DELTA_VECTOR)
+        self.update_view_matrix()
 
     def move_front(self):
         self.position += self.get_rotation_matrix().multiply_by_vector(self.Z_POSITION_DELTA_VECTOR)
+        self.update_view_matrix()
 
     def move_back(self):
         self.position -= self.get_rotation_matrix().multiply_by_vector(self.Z_POSITION_DELTA_VECTOR)
+        self.update_view_matrix()
 
     def move_up(self):
         self.position -= self.get_rotation_matrix().multiply_by_vector(self.Y_POSITION_DELTA_VECTOR)
+        self.update_view_matrix()
+
 
     def move_down(self):
         self.position += self.get_rotation_matrix().multiply_by_vector(self.Y_POSITION_DELTA_VECTOR)
+        self.update_view_matrix()
+
+    def get_view_matrix(self):
+        return self.view_matrix
+
+    def update_view_matrix(self):
+        self.view_matrix = self.get_rotation_matrix().transpose().multiply_by_matrix(self.view_matrix)
+        self.view_matrix = self.get_translation_matrix().multiply_by_matrix(self.view_matrix)
+        self.orientation = self.STARTING_ORIENTATION.copy()
+        self.position = self.STARTING_POSITION.copy()
+
 
     # def get_view_matrix(self):
     #     v = self.v
@@ -119,18 +149,18 @@ class Camera:
     #           -Vector4.dot_product_xyz(front, self.position)],
     #          [0, 0, 0, 1]])
 
-    def get_view_matrix(self):
-        view_matrix = self.get_rotation_matrix().transpose()
-
-        u = view_matrix.get_row(0)
-        v = view_matrix.get_row(1)
-        w = view_matrix.get_row(2)
-
-        view_matrix.set(0, 3, -Vector4.dot_product_xyz(u, self.position))
-        view_matrix.set(1, 3, -Vector4.dot_product_xyz(v, self.position))
-        view_matrix.set(2, 3, -Vector4.dot_product_xyz(w, self.position))
-
-        return view_matrix
+    # def get_view_matrix(self):
+    #     view_matrix = self.get_rotation_matrix().transpose()
+    #
+    #     u = view_matrix.get_row(0)
+    #     v = view_matrix.get_row(1)
+    #     w = view_matrix.get_row(2)
+    #
+    #     view_matrix.set(0, 3, -Vector4.dot_product_xyz(u, self.position))
+    #     view_matrix.set(1, 3, -Vector4.dot_product_xyz(v, self.position))
+    #     view_matrix.set(2, 3, -Vector4.dot_product_xyz(w, self.position))
+    #
+    #     return view_matrix
 
     def get_rotation_matrix_over_x(self):
         o_x = math.radians(self.orientation.get_x())
