@@ -31,13 +31,26 @@ def update_shape(camera: Camera, shape: Shape) -> Shape:
     clipped_triangles = clip_triangles_against_plane(triangles_after_view_matrix,
                                                      Vector4.from_cords(0, 0, camera.Z_NEAR, 1),
                                                      Vector4.from_cords(0, 0, 1, 1))
+    visible_triangles = []
+    for clipped_triangle in clipped_triangles:
+        edge1 = clipped_triangle[1] - clipped_triangle[0]
+        edge2 = clipped_triangle[2] - clipped_triangle[0]
+        normal = Vector4.cross_product_xyz(edge1, edge2)
+        normal = normal.get_normalized_xyz()
+
+        view_direction = (clipped_triangle[0] + clipped_triangle[1] + clipped_triangle[2]) / 3.
+
+        dot_product = Vector4.dot_product_xyz(normal, view_direction)
+
+        if dot_product > 0:
+            visible_triangles.append(clipped_triangle)
 
     triangles_after_perspective_projection = []
-    for clipped_triangle in clipped_triangles:
+    for visible_triangle in visible_triangles:
         perspective_projected_triangle = (
-            perspective_projection_matrix.multiply_by_vector(clipped_triangle[0]),
-            perspective_projection_matrix.multiply_by_vector(clipped_triangle[1]),
-            perspective_projection_matrix.multiply_by_vector(clipped_triangle[2])
+            perspective_projection_matrix.multiply_by_vector(visible_triangle[0]),
+            perspective_projection_matrix.multiply_by_vector(visible_triangle[1]),
+            perspective_projection_matrix.multiply_by_vector(visible_triangle[2])
         )
         triangles_after_perspective_projection.append(perspective_projected_triangle)
 
@@ -64,7 +77,6 @@ def clip_triangles_against_plane(triangles: list[tuple[Vector4, Vector4, Vector4
     clipped_triangles = chain.from_iterable(triangle_clip_against_plane(plane_p, plane_n, triangle)
                                             for triangle in triangles)
     return list(clipped_triangles)
-
 
 
 def draw(camera: Camera, screen: pygame.Surface, shapes: list[Shape]):

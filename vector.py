@@ -64,6 +64,15 @@ class Vector4:
         result.vector_np[:3] *= other
         return result
 
+    def __truediv__(self, other: float) -> 'Vector4':
+        result = self.copy()
+        # Check if other is not zero to avoid division by zero
+        if other != 0:
+            result.vector_np[:3] /= other
+        else:
+            raise ValueError("Division by zero is not allowed")
+        return result
+
     def get_x(self):
         return self.vector_np[0, 0]
 
