@@ -17,7 +17,7 @@ def get_intersection_point_of_line_with_a_plane(plane_p: Vector4,
 def triangle_clip_against_plane(plane_p: Vector4,
                                 plane_n: Vector4,
                                 triangle: tuple[Vector4, Vector4, Vector4]
-                                ) -> list[tuple[Vector4, Vector4, Vector4]] | None:
+                                ) -> list[tuple[Vector4, Vector4, Vector4]]:
     def get_signed_distance(point: Vector4):
         return Vector4.dot_product_xyz(plane_n, point) - Vector4.dot_product_xyz(plane_n, plane_p)
 
@@ -43,7 +43,7 @@ def triangle_clip_against_plane(plane_p: Vector4,
         outside_points.append(triangle[2])
 
     if len(inside_points) == 0:
-        return None
+        return []
     if len(inside_points) == 3:
         return [triangle]
 

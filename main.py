@@ -1,4 +1,5 @@
 import sys
+from itertools import chain
 
 import pygame
 
@@ -20,28 +21,50 @@ def update_shape(camera: Camera, shape: Shape) -> Shape:
     view_matrix = camera.get_view_matrix()
     perspective_projection_matrix = camera.get_perspective_projection_matrix()
 
-    updated_triangles: list[tuple[Vector4, Vector4, Vector4]] = []
+    triangles_after_view_matrix: list[tuple[Vector4, Vector4, Vector4]] = []
     for triangle in shape.triangles:
         updated_triangle: tuple[Vector4, Vector4, Vector4] = (view_matrix.multiply_by_vector(triangle[0]),
                                                               view_matrix.multiply_by_vector(triangle[1]),
                                                               view_matrix.multiply_by_vector(triangle[2]))
+        triangles_after_view_matrix.append(updated_triangle)
 
-        clipped_triangles = triangle_clip_against_plane(Vector4.from_cords(0, 0, camera.Z_NEAR, 0),
-                                                        Vector4.from_cords(0, 0, 1, 0),
-                                                        updated_triangle)
-        if clipped_triangles is None:
-            continue
+    clipped_triangles = clip_triangles_against_plane(triangles_after_view_matrix,
+                                                     Vector4.from_cords(0, 0, camera.Z_NEAR, 1),
+                                                     Vector4.from_cords(0, 0, 1, 1))
 
-        for clipped_triangle in clipped_triangles:
-            perspective_projected_triangle = (
-                perspective_projection_matrix.multiply_by_vector(clipped_triangle[0]),
-                perspective_projection_matrix.multiply_by_vector(clipped_triangle[1]),
-                perspective_projection_matrix.multiply_by_vector(clipped_triangle[2])
-            )
+    triangles_after_perspective_projection = []
+    for clipped_triangle in clipped_triangles:
+        perspective_projected_triangle = (
+            perspective_projection_matrix.multiply_by_vector(clipped_triangle[0]),
+            perspective_projection_matrix.multiply_by_vector(clipped_triangle[1]),
+            perspective_projection_matrix.multiply_by_vector(clipped_triangle[2])
+        )
+        triangles_after_perspective_projection.append(perspective_projected_triangle)
 
-            updated_triangles.append(perspective_projected_triangle)
+    clipped_triangles = triangles_after_perspective_projection
+    clipped_triangles = clip_triangles_against_plane(clipped_triangles,
+                                                     Vector4.from_cords(-1, 0, 0, 1),
+                                                     Vector4.from_cords(1, 0, 0, 1))
+    clipped_triangles = clip_triangles_against_plane(clipped_triangles,
+                                                     Vector4.from_cords(1, 0, 0, 1),
+                                                     Vector4.from_cords(-1, 0, 0, 1))
+    clipped_triangles = clip_triangles_against_plane(clipped_triangles,
+                                                     Vector4.from_cords(0, -1, 0, 1),
+                                                     Vector4.from_cords(0, 1, 0, 1))
+    clipped_triangles = clip_triangles_against_plane(clipped_triangles,
+                                                     Vector4.from_cords(0, 1, 0, 1),
+                                                     Vector4.from_cords(0, -1, 0, 1))
 
-    return Shape(updated_triangles)
+    return Shape(clipped_triangles)
+
+
+def clip_triangles_against_plane(triangles: list[tuple[Vector4, Vector4, Vector4]],
+                                 plane_p: Vector4,
+                                 plane_n: Vector4) -> list[tuple[Vector4, Vector4, Vector4]]:
+    clipped_triangles = chain.from_iterable(triangle_clip_against_plane(plane_p, plane_n, triangle)
+                                            for triangle in triangles)
+    return list(clipped_triangles)
+
 
 
 def draw(camera: Camera, screen: pygame.Surface, shapes: list[Shape]):
