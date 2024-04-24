@@ -83,7 +83,6 @@ def draw_triangle(screen: pygame.Surface, x1, y1, z1, x2, y2, z2, x3, y3, z3, co
                 DEPTH_BUFFER[x, y] = z
             t += t_step
 
-    # Calculate steps for the first part of the triangle
     dy1 = y2 - y1
     dx1 = x2 - x1
     dz1 = z2 - z1
