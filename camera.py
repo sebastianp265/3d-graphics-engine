@@ -123,7 +123,7 @@ class Camera:
         orientation = self.orientation * self.delta_time
         z_orientation_delta = self.Z_POSITION_DELTA_VECTOR * self.delta_time
 
-        self.position += get_rotation_matrix(orientation).multiply_by_vector(z_orientation_delta)
+        self.position -= get_rotation_matrix(orientation).multiply_by_vector(z_orientation_delta)
         self.update_view_matrix(translation_delta=z_orientation_delta)
 
     def move_up(self):

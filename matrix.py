@@ -28,7 +28,7 @@ class Matrix4:
     def multiply_by_vector(self, vector: Vector4) -> Vector4:
         result = Vector4(self.matrix_np @ vector.vector_np)
         if result.get_w() != 0:
-            result.vector_np /= result.get_w()
+            result.vector_np[:3] /= result.get_w()
         return result
 
     def get_column(self, j: int) -> Vector4:

@@ -1,20 +1,17 @@
-import sys
-from itertools import chain
-
 import pygame
-
-from camera import Camera
-from clipping import line_clip_against_plane, triangle_clip_against_plane
-from drawing import draw_camera_info, draw_shape
-from shape import Shape
-from vector import Vector4
 
 pygame.init()
 
-SCREEN_WIDTH = 720
-SCREEN_HEIGHT = 720
+import sys
+from itertools import chain
 
-FONT = pygame.font.Font(pygame.font.get_default_font(), 12)
+import numpy as np
+
+from camera import Camera
+from clipping import triangle_clip_against_plane
+from drawing import draw_camera_info, draw_shape, SCREEN_WIDTH, SCREEN_HEIGHT, DEPTH_BUFFER
+from shape import Shape
+from vector import Vector4
 
 
 def update_shape(camera: Camera, shape: Shape) -> Shape:
@@ -28,29 +25,30 @@ def update_shape(camera: Camera, shape: Shape) -> Shape:
                                                               view_matrix.multiply_by_vector(triangle[2]))
         triangles_after_view_matrix.append(updated_triangle)
 
-    clipped_triangles = clip_triangles_against_plane(triangles_after_view_matrix,
-                                                     Vector4.from_cords(0, 0, camera.Z_NEAR, 1),
-                                                     Vector4.from_cords(0, 0, 1, 1))
     visible_triangles = []
-    for clipped_triangle in clipped_triangles:
-        edge1 = clipped_triangle[1] - clipped_triangle[0]
-        edge2 = clipped_triangle[2] - clipped_triangle[0]
+
+    for triangle_after_view_matrix in triangles_after_view_matrix:
+        edge1 = triangle_after_view_matrix[1] - triangle_after_view_matrix[0]
+        edge2 = triangle_after_view_matrix[2] - triangle_after_view_matrix[0]
         normal = Vector4.cross_product_xyz(edge1, edge2)
         normal = normal.get_normalized_xyz()
 
-        view_direction = (clipped_triangle[0] + clipped_triangle[1] + clipped_triangle[2]) / 3.
+        dot_product0 = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[0])
+        dot_product1 = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[1])
+        dot_product2 = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[2])
+        if dot_product0 > 0 or dot_product1 > 0 or dot_product2 > 0:
+            visible_triangles.append(triangle_after_view_matrix)
 
-        dot_product = Vector4.dot_product_xyz(normal, view_direction)
-
-        if dot_product > 0:
-            visible_triangles.append(clipped_triangle)
+    clipped_triangles_z = clip_triangles_against_plane(visible_triangles,
+                                                       Vector4.from_cords(0, 0, camera.Z_NEAR, 1),
+                                                       Vector4.from_cords(0, 0, 1, 1))
 
     triangles_after_perspective_projection = []
-    for visible_triangle in visible_triangles:
+    for clipped_triangle_z in clipped_triangles_z:
         perspective_projected_triangle = (
-            perspective_projection_matrix.multiply_by_vector(visible_triangle[0]),
-            perspective_projection_matrix.multiply_by_vector(visible_triangle[1]),
-            perspective_projection_matrix.multiply_by_vector(visible_triangle[2])
+            perspective_projection_matrix.multiply_by_vector(clipped_triangle_z[0]),
+            perspective_projection_matrix.multiply_by_vector(clipped_triangle_z[1]),
+            perspective_projection_matrix.multiply_by_vector(clipped_triangle_z[2])
         )
         triangles_after_perspective_projection.append(perspective_projected_triangle)
 
@@ -68,7 +66,7 @@ def update_shape(camera: Camera, shape: Shape) -> Shape:
                                                      Vector4.from_cords(0, 1, 0, 1),
                                                      Vector4.from_cords(0, -1, 0, 1))
 
-    return Shape(clipped_triangles)
+    return Shape(clipped_triangles, shape.color)
 
 
 def clip_triangles_against_plane(triangles: list[tuple[Vector4, Vector4, Vector4]],
@@ -81,11 +79,12 @@ def clip_triangles_against_plane(triangles: list[tuple[Vector4, Vector4, Vector4
 
 def draw(camera: Camera, screen: pygame.Surface, shapes: list[Shape]):
     screen.fill((255, 255, 255))
+    DEPTH_BUFFER.fill(np.inf)
 
-    draw_camera_info(camera, screen, FONT)
     for shape in shapes:
         shape = update_shape(camera, shape)
         draw_shape(screen, shape)
+    draw_camera_info(camera, screen)
     pygame.display.update()
 
 
@@ -203,6 +202,13 @@ def main(is_continous: bool = False) -> None:
         shape.set_offset(os)
         shapes.append(shape)
 
+    colors = [(127, 0, 127),
+              (0, 255, 0),
+              (0, 0, 255),
+              (127, 127, 0)]
+    for i, color in enumerate(colors):
+        shapes[i].set_color(color)
+
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Hello world")
 
@@ -215,4 +221,4 @@ def main(is_continous: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    main(True)
+    main(False)
