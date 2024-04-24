@@ -33,10 +33,8 @@ def update_shape(camera: Camera, shape: Shape) -> Shape:
         normal = Vector4.cross_product_xyz(edge1, edge2)
         normal = normal.get_normalized_xyz()
 
-        dot_product0 = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[0])
-        dot_product1 = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[1])
-        dot_product2 = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[2])
-        if dot_product0 > 0 or dot_product1 > 0 or dot_product2 > 0:
+        dot_product = Vector4.dot_product_xyz(normal, triangle_after_view_matrix[0])
+        if dot_product > 0:
             visible_triangles.append(triangle_after_view_matrix)
 
     clipped_triangles_z = clip_triangles_against_plane(visible_triangles,
