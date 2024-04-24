@@ -8,16 +8,15 @@ J 0 -3 0
 K 0 -3 2
 L 2 -3 2
 12
-A B
-B C
-C D
-D A
-I J
-J K
-K L
-L I
-A I
-B J
-C K
-D L
-
+A B C
+A C D # bottom
+I J K
+I K L # top
+D C K
+D K L # north
+A B J
+A J I # south
+A I L
+A L D # east
+B J K
+B K C # west

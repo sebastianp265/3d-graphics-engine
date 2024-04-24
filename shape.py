@@ -3,16 +3,17 @@ import numpy as np
 
 
 class Shape:
-    lines: list[tuple[Vector4, Vector4]]
+    triangles: list[tuple[Vector4, Vector4, Vector4]]
 
-    def __init__(self, lines: list[tuple[Vector4, Vector4]]):
-        self.lines = lines
+    def __init__(self, triangles: list[tuple[Vector4, Vector4, Vector4]]):
+        self.triangles = triangles
 
     def copy(self):
-        return Shape([(point1.copy(), point2.copy()) for point1, point2 in self.lines])
+        return Shape([(point1.copy(), point2.copy(), point3.copy()) for point1, point2, point3 in self.triangles])
 
     def set_offset(self, offset: Vector4):
-        for p1, p2 in self.lines:
+        for p0, p1, p2 in self.triangles:
+            p0.set_offset(offset)
             p1.set_offset(offset)
             p2.set_offset(offset)
 
@@ -27,10 +28,11 @@ class Shape:
                 points[args[0]] = np.array([[float(x)] for x in args[1:4] + [1]])
 
             num_of_lines = int(f.readline())
-            lines = []
+            triangles = []
             for _ in range(num_of_lines):
                 args = f.readline().strip().split()
-                lines.append((Vector4(points[args[0]].copy()),
-                              Vector4(points[args[1]].copy())))
+                triangles.append((Vector4(points[args[0]].copy()),
+                                  Vector4(points[args[1]].copy()),
+                                  Vector4(points[args[2]].copy())))
 
-            return Shape(lines)
+            return Shape(triangles)

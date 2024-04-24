@@ -21,8 +21,11 @@ def draw_camera_info(camera: Camera,
 
 
 def draw_shape(screen: pygame.Surface, shape: Shape):
-    for edge in shape.lines:
-        point1, point2 = edge
+    for triangle in shape.triangles:
+        point0, point1, point2 = triangle
+
+        x0 = (point0.get_x() + 1) * screen.get_width() / 2
+        y0 = (point0.get_y() + 1) * screen.get_height() / 2
 
         x1 = (point1.get_x() + 1) * screen.get_width() / 2
         y1 = (point1.get_y() + 1) * screen.get_height() / 2
@@ -30,4 +33,8 @@ def draw_shape(screen: pygame.Surface, shape: Shape):
         x2 = (point2.get_x() + 1) * screen.get_width() / 2
         y2 = (point2.get_y() + 1) * screen.get_height() / 2
 
+        pygame.draw.line(screen, [0, 0, 0], (x0, y0), (x1, y1))
+
         pygame.draw.line(screen, [0, 0, 0], (x1, y1), (x2, y2))
+
+        pygame.draw.line(screen, [0, 0, 0], (x2, y2), (x0, y0))
